@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+
+# Environment
+.env
+.env.*
+
+# Database
+*.db
+*.sqlite3
+
+# Logs
+logs/
+*.log
+
+# Tests and Scratch
+scratch/
+test_*.py
+seed.py
+seed_saas.py
+create_db.py
+
+# Editor
+.vscode/
+.idea/
