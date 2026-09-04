@@ -56,12 +56,16 @@ def send_sms_task(self, phone_number: str, message: str, log_id: int):
              
         company = db.query(db_models.Company).filter(db_models.Company.id == branch.company_id).first()
         
+        client_id = (company.hubtel_client_id if company and company.hubtel_client_id else settings.HUBTEL_CLIENT_ID)
+        secret = (company.hubtel_client_secret if company and company.hubtel_client_secret else settings.HUBTEL_CLIENT_SECRET)
+        sender_id = (company.hubtel_sender_id if company and company.hubtel_sender_id else settings.HUBTEL_SENDER_ID)
+
         result = sms_service.send_sms(
             phone_number, 
             message, 
-            client_id=company.hubtel_client_id, 
-            secret=company.hubtel_client_secret,
-            sender_id=company.hubtel_sender_id
+            client_id=client_id, 
+            secret=secret,
+            sender_id=sender_id
         )
 
         # If technical error, trigger a retry with exponential backoff

@@ -61,7 +61,7 @@ def send_custom_sms(
 
         # 2. Worker Connectivity Check (Redis)
         try:
-            redis_client = Redis.from_url(settings.REDIS_URL, socket_connect_timeout=1)
+            redis_client = Redis.from_url(settings.REDIS_URL, socket_connect_timeout=4, socket_timeout=4)
             redis_client.ping()
         except Exception:
             raise HTTPException(
@@ -350,7 +350,7 @@ async def import_and_send_branch_bulk_sms(
 
         # 3. Worker Connectivity Check (Redis)
         try:
-            redis_client = Redis.from_url(settings.REDIS_URL, socket_connect_timeout=1)
+            redis_client = Redis.from_url(settings.REDIS_URL, socket_connect_timeout=4, socket_timeout=4)
             redis_client.ping()
         except Exception:
             raise HTTPException(
@@ -414,3 +414,28 @@ async def import_and_send_branch_bulk_sms(
             exc_info=True
         )
         raise HTTPException(status_code=500, detail=f"Failed to process bulk import: {str(e)}")
+
+@router.delete("/{log_id}")
+def delete_sms_log(
+    log_id: int,
+    db: Session = Depends(get_db),
+    current_branch: db_models.Branch = Depends(get_current_branch),
+):
+    try:
+        log = db.query(db_models.SMSLog).filter(
+            db_models.SMSLog.id == log_id,
+            db_models.SMSLog.branch_id == current_branch.id
+        ).first()
+
+        if not log:
+            raise HTTPException(status_code=404, detail="SMS log not found")
+
+        db.delete(log)
+        db.commit()
+        return {"message": "SMS log deleted successfully"}
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error deleting SMS log {log_id}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to delete SMS log")

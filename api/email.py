@@ -99,6 +99,10 @@ def send_bulk_email(
         elif bulk_in.filter_type == "month":
             start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
             query = query.filter(db_models.Customer.created_at >= start_date)
+        elif bulk_in.filter_type == "custom_selection":
+            if not bulk_in.customer_ids or len(bulk_in.customer_ids) < 2:
+                raise HTTPException(status_code=400, detail="Please select at least two customers for custom selection.")
+            query = query.filter(db_models.Customer.id.in_(bulk_in.customer_ids))
         # 'all' doesn't need extra filter
 
         customers = query.all()
@@ -108,6 +112,7 @@ def send_bulk_email(
 
         queued_count = 0
         branch_name = current_branch.name or "Class House"
+        tasks_to_queue = []
         
         import re
         for customer in customers:
@@ -142,21 +147,24 @@ def send_bulk_email(
             db.add(new_log)
             db.flush()
 
-            # Queue task
-            now_naive = datetime.utcnow()
+            tasks_to_queue.append((customer.email, personalized_subject, personalized_content, new_log.id, scheduled_at))
+            queued_count += 1
+        
+        db.commit()
 
+        # Queue Celery background tasks AFTER commit is completed
+        now_naive = datetime.utcnow()
+        for recipient_email, personalized_subject, personalized_content, log_id, scheduled_at in tasks_to_queue:
             if scheduled_at and scheduled_at > now_naive + timedelta(seconds=30):
                 send_email_task.apply_async(
-                    args=[customer.email, personalized_subject, personalized_content, new_log.id],
+                    args=[recipient_email, personalized_subject, personalized_content, log_id],
                     eta=scheduled_at
                 )
             else:
                 send_email_task.delay(
-                    customer.email, personalized_subject, personalized_content, new_log.id
+                    recipient_email, personalized_subject, personalized_content, log_id
                 )
-            queued_count += 1
-        
-        db.commit()
+
         return {"message": f"Successfully queued {queued_count} emails", "count": queued_count}
     except Exception as e:
         db.rollback()
@@ -199,3 +207,27 @@ def read_email_logs(
     items = query.order_by(db_models.EmailLog.created_at.desc()).offset(skip).limit(limit).all()
     
     return {"items": items, "total": total}
+
+@router.delete("/{log_id}")
+def delete_email_log(
+    log_id: int,
+    db: Session = Depends(get_db),
+    current_branch: db_models.Branch = Depends(get_current_branch),
+):
+    try:
+        log = db.query(db_models.EmailLog).filter(
+            db_models.EmailLog.id == log_id,
+            db_models.EmailLog.branch_id == current_branch.id
+        ).first()
+
+        if not log:
+            raise HTTPException(status_code=404, detail="Email log not found")
+
+        db.delete(log)
+        db.commit()
+        return {"message": "Email log deleted successfully"}
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to delete Email log")

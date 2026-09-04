@@ -175,10 +175,11 @@ class EmailLog(EmailLogBase):
 
 
 class BulkEmailCreate(BaseModel):
-    filter_type: str  # 'today', 'week', 'month', 'year', 'all'
+    filter_type: str  # 'today', 'week', 'month', 'year', 'all', 'custom_selection'
     subject: str
     message_content: str
     scheduled_for: Optional[datetime] = None
+    customer_ids: Optional[List[int]] = None
 
 
 # Pagination Wrapper Schemas
