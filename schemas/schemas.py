@@ -175,11 +175,49 @@ class EmailLog(EmailLogBase):
 
 
 class BulkEmailCreate(BaseModel):
-    filter_type: str  # 'today', 'week', 'month', 'year', 'all', 'custom_selection'
+    filter_type: str  # 'today', 'week', 'month', 'year', 'all', 'custom_selection', 'folder'
     subject: str
     message_content: str
     scheduled_for: Optional[datetime] = None
     customer_ids: Optional[List[int]] = None
+    folder_id: Optional[int] = None
+
+
+# Contact Folder Schemas
+class FolderCustomerOut(BaseModel):
+    id: int
+    full_name: str
+    phone_number: str
+    email: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class FolderCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    customer_ids: List[int] = []
+
+
+class FolderUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    customer_ids: Optional[List[int]] = None
+
+
+class FolderOut(BaseModel):
+    id: int
+    branch_id: int
+    name: str
+    description: Optional[str] = None
+    created_at: datetime
+    total_contacts: int = 0
+    customers: List[FolderCustomerOut] = []
+
+    class Config:
+        from_attributes = True
+
 
 
 # Pagination Wrapper Schemas

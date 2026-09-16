@@ -157,9 +157,24 @@ def send_bulk_sms(
             if not bulk_in.customer_ids or len(bulk_in.customer_ids) < 2:
                 raise HTTPException(status_code=400, detail="Please select at least two customers for custom selection.")
             query = query.filter(db_models.Customer.id.in_(bulk_in.customer_ids))
+        elif bulk_in.filter_type == "folder" or bulk_in.folder_id:
+            if not bulk_in.folder_id:
+                raise HTTPException(status_code=400, detail="Please select a folder.")
+            folder = (
+                db.query(db_models.ContactFolder)
+                .filter(
+                    db_models.ContactFolder.id == bulk_in.folder_id,
+                    db_models.ContactFolder.branch_id == current_branch.id,
+                )
+                .first()
+            )
+            if not folder:
+                raise HTTPException(status_code=404, detail="Selected folder not found.")
+            customers = folder.customers
         # 'all' doesn't need extra filter
 
-        customers = query.all()
+        if bulk_in.filter_type != "folder" and not bulk_in.folder_id:
+            customers = query.all()
 
         if not customers:
             return {"message": "No customers found for the selected filter", "count": 0}

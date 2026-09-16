@@ -9,8 +9,10 @@ class SMSCreate(BaseModel):
     scheduled_for: datetime
 
 class BulkSMSCreate(BaseModel):
-    filter_type: str # 'today', 'week', 'month', 'year', 'all', 'custom_selection'
+    filter_type: str # 'today', 'week', 'month', 'year', 'all', 'custom_selection', 'folder'
     message_content: str
     message_type: str
     scheduled_for: Optional[datetime] = None
     customer_ids: Optional[list[int]] = None
+    folder_id: Optional[int] = None
+

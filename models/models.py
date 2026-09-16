@@ -1,7 +1,14 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, Boolean, Table
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from core.database import Base
+
+folder_customers = Table(
+    "folder_customers",
+    Base.metadata,
+    Column("folder_id", Integer, ForeignKey("contact_folders.id", ondelete="CASCADE"), primary_key=True),
+    Column("customer_id", Integer, ForeignKey("customers.id", ondelete="CASCADE"), primary_key=True),
+)
 
 class Company(Base):
     __tablename__ = "companies"
@@ -37,6 +44,19 @@ class Branch(Base):
 
     company = relationship("Company", back_populates="branches")
     customers = relationship("Customer", back_populates="branch", cascade="all, delete-orphan")
+    folders = relationship("ContactFolder", back_populates="branch", cascade="all, delete-orphan")
+
+class ContactFolder(Base):
+    __tablename__ = "contact_folders"
+
+    id = Column(Integer, primary_key=True, index=True)
+    branch_id = Column(Integer, ForeignKey("branches.id"), nullable=False, index=True)
+    name = Column(String, index=True, nullable=False)
+    description = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    branch = relationship("Branch", back_populates="folders")
+    customers = relationship("Customer", secondary=folder_customers, back_populates="folders")
 
 class Customer(Base):
     __tablename__ = "customers"
@@ -49,6 +69,7 @@ class Customer(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     
     branch = relationship("Branch", back_populates="customers")
+    folders = relationship("ContactFolder", secondary=folder_customers, back_populates="customers")
 
 class Message(Base):
     __tablename__ = "messages"
