@@ -77,6 +77,46 @@ def delete_template(
     return {"message": "Template deleted successfully"}
 
 
+@router.put("/{message_id}", response_model=api_schemas.Message)
+def update_template(
+    message_id: int,
+    msg_in: api_schemas.MessageUpdate,
+    db: Session = Depends(get_db),
+    current_branch: db_models.Branch = Depends(get_current_branch),
+):
+    template = (
+        db.query(db_models.Message)
+        .filter(
+            db_models.Message.id == message_id,
+            (db_models.Message.branch_id == current_branch.id)
+            | (db_models.Message.branch_id == None),
+        )
+        .first()
+    )
+
+    if not template:
+        raise HTTPException(
+            status_code=404, detail="Template not found or not accessible by this branch"
+        )
+
+    try:
+        if msg_in.template_type is not None:
+            template.template_type = msg_in.template_type.strip()
+        if msg_in.content is not None:
+            template.content = msg_in.content
+        if template.branch_id is None:
+            template.branch_id = current_branch.id
+
+        db.commit()
+        db.refresh(template)
+        return template
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=400, detail=f"Failed to update template: {str(e)}"
+        )
+
+
 @router.get("/pending")
 def read_pending_messages(
     db: Session = Depends(get_db),

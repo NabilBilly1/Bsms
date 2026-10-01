@@ -118,6 +118,11 @@ class MessageCreate(MessageBase):
     pass
 
 
+class MessageUpdate(BaseModel):
+    template_type: Optional[str] = None
+    content: Optional[str] = None
+
+
 class Message(MessageBase):
     id: int
     created_at: datetime
