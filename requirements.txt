@@ -11,6 +11,7 @@ redis
 pydantic-settings
 python-jose[cryptography]
 psycopg2-binary
+psycopg[binary]
 alembic
 requests
 openpyxl
