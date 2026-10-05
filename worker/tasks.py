@@ -18,6 +18,10 @@ celery_app.conf.update(
             "task": "recover_missed_messages_task",
             "schedule": 300.0,  # 5 minutes
         },
+        "celery-heartbeat-every-15-mins": {
+            "task": "heartbeat_task",
+            "schedule": 900.0,  # 15 minutes
+        },
     },
 )
 
@@ -112,6 +116,16 @@ def send_sms_task(self, phone_number: str, message: str, log_id: int):
         db.close()
 
     return result
+
+
+@celery_app.task(name="heartbeat_task")
+def heartbeat_task():
+    """
+    Lightweight periodic task that keeps the worker responsive while
+    service sleep is enabled.
+    """
+    logger.info("Worker heartbeat")
+    return "ok"
 
 
 @celery_app.task(name="recover_missed_messages_task")
