@@ -3,6 +3,6 @@ builder = "nixpacks"
 
 [deploy]
 startCommand = "uvicorn main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips='*'"
-preDeployCommand = "alembic upgrade head"
+preDeployCommand = "python pre_deploy.py"
 healthCheckPath = "/"
 healthCheckTimeout = 100
