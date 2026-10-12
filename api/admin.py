@@ -100,7 +100,9 @@ def create_company(company_in: api_schemas.CompanyCreate, db: Session = Depends(
         hubtel_sender_id=company_in.hubtel_sender_id,
         brevo_api_key=company_in.brevo_api_key,
         brevo_sender_email=company_in.brevo_sender_email,
-        brevo_sender_name=company_in.brevo_sender_name
+        brevo_sender_name=company_in.brevo_sender_name,
+        paystack_public_key=company_in.paystack_public_key,
+        paystack_secret_key=company_in.paystack_secret_key,
     )
     db.add(new_company)
     db.commit()
@@ -638,3 +640,114 @@ async def import_and_send_bulk_sms(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Failed to process bulk import: {str(e)}")
+
+
+# ──────────────────────────────────────────────────────────
+# Paystack Management Endpoints (Master Admin)
+# ──────────────────────────────────────────────────────────
+
+from core.paystack_utils import get_paystack_credentials, mask_key
+
+@router.get("/paystack/settings", response_model=api_schemas.PaystackSettings)
+def get_admin_paystack_settings(db: Session = Depends(get_db)):
+    """
+    Returns platform-wide Paystack settings with the secret key masked.
+    """
+    public_key, secret_key, currency = get_paystack_credentials(db)
+    return api_schemas.PaystackSettings(
+        public_key=public_key or "",
+        secret_key=mask_key(secret_key) if secret_key else "",
+        currency=currency or "GHS",
+        is_configured=bool(public_key and secret_key),
+    )
+
+
+@router.post("/paystack/settings")
+def update_admin_paystack_settings(
+    settings_in: api_schemas.PaystackSettingsUpdate,
+    db: Session = Depends(get_db),
+):
+    """
+    Updates platform-wide Paystack settings in the SystemSetting table.
+    """
+    try:
+        def set_setting(key: str, val: Optional[str]):
+            if val is not None:
+                record = db.query(db_models.SystemSetting).filter(db_models.SystemSetting.key == key).first()
+                if not record:
+                    record = db_models.SystemSetting(key=key, value=val.strip() if val else "")
+                    db.add(record)
+                else:
+                    record.value = val.strip() if val else ""
+
+        if settings_in.public_key is not None:
+            set_setting("paystack_public_key", settings_in.public_key)
+
+        # Only update secret key if not masked and not empty
+        if settings_in.secret_key is not None and not settings_in.secret_key.startswith("sk_") and "***" in settings_in.secret_key:
+            pass  # Do not overwrite with masked key
+        elif settings_in.secret_key is not None and settings_in.secret_key.strip():
+            set_setting("paystack_secret_key", settings_in.secret_key.strip())
+
+        if settings_in.currency is not None:
+            set_setting("paystack_currency", settings_in.currency.strip().upper())
+
+        db.commit()
+        return {"status": "success", "message": "Paystack settings updated successfully"}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Failed to update Paystack settings: {str(e)}")
+
+
+@router.get("/payments", response_model=api_schemas.PaginatedPaymentTransaction)
+def get_admin_payments(
+    skip: int = 0,
+    limit: int = 15,
+    search: Optional[str] = None,
+    status: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    """
+    Returns paginated list of all payment transactions across the platform.
+    """
+    query = db.query(db_models.PaymentTransaction)
+
+    if status:
+        query = query.filter(db_models.PaymentTransaction.status == status.lower())
+
+    if search:
+        s = f"%{search.strip()}%"
+        query = query.filter(
+            or_(
+                db_models.PaymentTransaction.reference.ilike(s),
+                db_models.PaymentTransaction.customer_email.ilike(s),
+            )
+        )
+
+    total = query.count()
+    txs = query.order_by(db_models.PaymentTransaction.created_at.desc()).offset(skip).limit(limit).all()
+
+    items = []
+    for tx in txs:
+        items.append(
+            api_schemas.PaymentTransactionSchema(
+                id=tx.id,
+                reference=tx.reference,
+                company_id=tx.company_id,
+                branch_id=tx.branch_id,
+                company_name=tx.company.name if tx.company else None,
+                branch_name=tx.branch.name if tx.branch else None,
+                amount=round(tx.amount / 100.0, 2),
+                currency=tx.currency,
+                customer_email=tx.customer_email,
+                status=tx.status,
+                channel=tx.channel,
+                purpose=tx.purpose,
+                credits_purchased=tx.credits_purchased,
+                paid_at=tx.paid_at,
+                created_at=tx.created_at,
+            )
+        )
+
+    return api_schemas.PaginatedPaymentTransaction(items=items, total=total)
+

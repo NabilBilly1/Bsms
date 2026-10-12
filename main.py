@@ -1,6 +1,6 @@
 import traceback
 
-from api import admin, auth, customers, email, folders, messages, sms
+from api import admin, auth, customers, email, folders, messages, payments, sms
 from core.config import settings
 from core.database import Base, engine, get_db
 from core.logger import logger
@@ -88,3 +88,4 @@ app.include_router(folders.router, prefix="/folders", tags=["Contact Folders"])
 app.include_router(sms.router, prefix="/sms", tags=["SMS Logs"])
 app.include_router(email.router, prefix="/email", tags=["Email Logs"])
 app.include_router(messages.router, prefix="/messages", tags=["Message Templates"])
+app.include_router(payments.router, prefix="/payments", tags=["Payments"])

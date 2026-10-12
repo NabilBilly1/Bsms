@@ -28,6 +28,10 @@ class Company(Base):
     brevo_sender_email = Column(String, nullable=True)
     brevo_sender_name = Column(String, nullable=True)
     
+    # Payment Gateway (Paystack)
+    paystack_public_key = Column(String, nullable=True)
+    paystack_secret_key = Column(String, nullable=True)
+    
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     branches = relationship("Branch", back_populates="company", cascade="all, delete-orphan")
@@ -114,3 +118,33 @@ class EmailLog(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     branch = relationship("Branch")
+ 
+class SystemSetting(Base):
+    __tablename__ = "system_settings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    key = Column(String, unique=True, index=True, nullable=False)
+    value = Column(Text, nullable=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+class PaymentTransaction(Base):
+    __tablename__ = "payment_transactions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    reference = Column(String, unique=True, index=True, nullable=False)
+    company_id = Column(Integer, ForeignKey("companies.id", ondelete="SET NULL"), nullable=True)
+    branch_id = Column(Integer, ForeignKey("branches.id", ondelete="SET NULL"), nullable=True)
+    amount = Column(Integer, nullable=False)  # Stored in lowest currency unit (pesewas/kobo/cents) or standard float
+    currency = Column(String, default="GHS")
+    customer_email = Column(String, index=True, nullable=False)
+    status = Column(String, default="pending")  # "pending", "success", "failed", "abandoned"
+    channel = Column(String, nullable=True)  # "card", "mobile_money", etc.
+    purpose = Column(String, default="sms_credits")  # "sms_credits", "subscription", "custom"
+    credits_purchased = Column(Integer, nullable=True)
+    paystack_response = Column(Text, nullable=True)
+    paid_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    company = relationship("Company")
+    branch = relationship("Branch")
+

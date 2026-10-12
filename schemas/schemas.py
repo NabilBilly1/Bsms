@@ -36,6 +36,8 @@ class CompanyCreate(CompanyBase):
     brevo_api_key: Optional[str] = None
     brevo_sender_email: Optional[EmailStr] = None
     brevo_sender_name: Optional[str] = None
+    paystack_public_key: Optional[str] = None
+    paystack_secret_key: Optional[str] = None
 
 class CompanyUpdate(BaseModel):
     name: Optional[str] = None
@@ -47,6 +49,8 @@ class CompanyUpdate(BaseModel):
     brevo_api_key: Optional[str] = None
     brevo_sender_email: Optional[EmailStr] = None
     brevo_sender_name: Optional[str] = None
+    paystack_public_key: Optional[str] = None
+    paystack_secret_key: Optional[str] = None
 
 class Company(CompanyBase):
     id: int
@@ -57,6 +61,8 @@ class Company(CompanyBase):
     brevo_api_key: Optional[str] = None
     brevo_sender_email: Optional[EmailStr] = None
     brevo_sender_name: Optional[str] = None
+    paystack_public_key: Optional[str] = None
+    paystack_secret_key: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -286,4 +292,57 @@ class GlobalStats(BaseModel):
     total_sms: int
     total_emails: int
     total_customers: int
+
+
+# Paystack & Payment Schemas
+class PaystackSettings(BaseModel):
+    public_key: Optional[str] = None
+    secret_key: Optional[str] = None
+    currency: Optional[str] = "GHS"
+    is_configured: bool = False
+
+class PaystackSettingsUpdate(BaseModel):
+    public_key: Optional[str] = None
+    secret_key: Optional[str] = None
+    currency: Optional[str] = "GHS"
+
+class PaymentInitializeRequest(BaseModel):
+    amount: float  # In major currency unit (e.g. 50.00 GHS)
+    customer_email: EmailStr
+    currency: Optional[str] = None
+    company_id: Optional[int] = None
+    branch_id: Optional[int] = None
+    purpose: Optional[str] = "sms_credits"
+    credits_purchased: Optional[int] = None
+    callback_url: Optional[str] = None
+
+class PaymentInitializeResponse(BaseModel):
+    authorization_url: str
+    access_code: str
+    reference: str
+
+class PaymentTransactionSchema(BaseModel):
+    id: int
+    reference: str
+    company_id: Optional[int] = None
+    branch_id: Optional[int] = None
+    company_name: Optional[str] = None
+    branch_name: Optional[str] = None
+    amount: float
+    currency: str
+    customer_email: str
+    status: str
+    channel: Optional[str] = None
+    purpose: str
+    credits_purchased: Optional[int] = None
+    paid_at: Optional[datetime] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class PaginatedPaymentTransaction(BaseModel):
+    items: List[PaymentTransactionSchema]
+    total: int
+
 

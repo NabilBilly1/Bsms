@@ -1,4 +1,5 @@
 import os
+from typing import Optional
 from pydantic_settings import BaseSettings
 from dotenv import load_dotenv
 
@@ -18,6 +19,11 @@ class Settings(BaseSettings):
     
     # Frontend URL for CORS
     FRONTEND_URL: str = "http://localhost:5173"
+
+    # Paystack Payment Gateway
+    PAYSTACK_SECRET_KEY: Optional[str] = None
+    PAYSTACK_PUBLIC_KEY: Optional[str] = None
+    PAYSTACK_CURRENCY: str = "GHS"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
