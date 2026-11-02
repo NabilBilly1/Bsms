@@ -13,6 +13,12 @@ celery_app.conf.update(
     result_serializer="json",
     timezone="UTC",
     enable_utc=True,
+    # Tasks are I/O-bound (Hubtel/SMTP calls, small DB writes), so a few
+    # processes are enough. Default is one process per host CPU core.
+    worker_concurrency=2,
+    # Recycle child processes to stop slow memory growth.
+    worker_max_tasks_per_child=200,
+    worker_max_memory_per_child=300_000,  # KiB (~300 MB)
     beat_schedule={
         "recover-missed-messages-every-5-mins": {
             "task": "recover_missed_messages_task",
