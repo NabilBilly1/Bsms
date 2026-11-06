@@ -9,7 +9,7 @@ from core.config import settings
 from core.database import get_db
 from core.logger import get_logger
 from core.utils import clean_html
-from core.sms_utils import normalize_ghana_phone
+from core.sms_utils import normalize_phone, is_valid_phone
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from models import models as db_models
 from redis import Redis
@@ -24,12 +24,6 @@ from .deps import get_current_branch
 logger = get_logger(__name__)
 
 router = APIRouter()
-
-
-def is_valid_phone(phone: str) -> bool:
-    # Strict Ghana format: +233 followed by 9 digits
-    pattern = r"^\+233\d{9}$"
-    return bool(re.match(pattern, phone.strip()))
 
 
 @router.post("/send", response_model=api_schemas.SMSLog)
@@ -56,7 +50,7 @@ def send_custom_sms(
         if not is_valid_phone(customer.phone_number):
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid phone format: {customer.phone_number}. Please use international format (e.g. 233...)",
+                detail=f"Invalid phone format: {customer.phone_number}. Please use international format (e.g. +233..., +234..., +1...)",
             )
 
         # 2. Worker Connectivity Check (Redis)
@@ -182,8 +176,21 @@ def send_bulk_sms(
         queued_count = 0
         branch_name = current_branch.name or "Class House"
         tasks_to_queue = []
+        seen_phones = set()
 
         for customer in customers:
+            if not customer.phone_number:
+                continue
+
+            norm_phone = normalize_ghana_phone(customer.phone_number)
+            if not is_valid_phone(norm_phone):
+                continue
+
+            # Prevent duplicate messages to the same phone number in a single bulk campaign
+            if norm_phone in seen_phones:
+                continue
+            seen_phones.add(norm_phone)
+
             # Perform dynamic placeholder replacement for this specific customer
             personalized_content = re.sub(r'\{\s*name\s*\}', customer.full_name, bulk_in.message_content, flags=re.IGNORECASE)
             personalized_content = re.sub(r'\{\s*branch\s*\}', branch_name, personalized_content, flags=re.IGNORECASE)
@@ -209,16 +216,17 @@ def send_bulk_sms(
             # Create SMS Log
             new_log = db_models.SMSLog(
                 branch_id=current_branch.id,
-                phone_number=customer.phone_number,
+                phone_number=norm_phone,
                 message_type=bulk_in.message_type,
                 message_content=personalized_content,
                 status="queued",
+                is_bulk=True,
                 scheduled_for=scheduled_at,
             )
             db.add(new_log)
             db.flush()  # Get ID without committing entire loop yet
 
-            tasks_to_queue.append((customer.phone_number, personalized_content, new_log.id, scheduled_at))
+            tasks_to_queue.append((norm_phone, personalized_content, new_log.id, scheduled_at))
             queued_count += 1
 
         db.commit()
@@ -378,7 +386,7 @@ async def import_and_send_branch_bulk_sms(
         tasks_to_queue = []
         seen_phones = set()
         for rec in recipients:
-            norm_phone = normalize_ghana_phone(rec["phone"])
+            norm_phone = normalize_phone(rec["phone"])
             if not is_valid_phone(norm_phone):
                 continue # Skip invalid numbers
             
@@ -430,6 +438,25 @@ async def import_and_send_branch_bulk_sms(
         )
         raise HTTPException(status_code=500, detail=f"Failed to process bulk import: {str(e)}")
 
+@router.delete("/clear-all")
+def clear_all_branch_sms_logs(
+    db: Session = Depends(get_db),
+    current_branch: db_models.Branch = Depends(get_current_branch),
+):
+    try:
+        deleted = (
+            db.query(db_models.SMSLog)
+            .filter(db_models.SMSLog.branch_id == current_branch.id)
+            .delete(synchronize_session=False)
+        )
+        db.commit()
+        return {"message": f"Successfully deleted all {deleted} SMS logs", "count": deleted}
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error clearing SMS logs for branch {current_branch.id}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to clear SMS logs")
+
+
 @router.delete("/{log_id}")
 def delete_sms_log(
     log_id: int,
@@ -454,3 +481,4 @@ def delete_sms_log(
         db.rollback()
         logger.error(f"Error deleting SMS log {log_id}: {str(e)}")
         raise HTTPException(status_code=500, detail="Failed to delete SMS log")
+

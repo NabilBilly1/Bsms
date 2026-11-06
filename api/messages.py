@@ -1,3 +1,4 @@
+import re
 from typing import List
 
 from core.database import get_db
@@ -12,16 +13,50 @@ from .deps import get_current_branch
 router = APIRouter()
 
 
+def _normalize_template_text(val: str) -> str:
+    if not val:
+        return ""
+    text = re.sub(r"<[^>]*>", " ", str(val))
+    text = (
+        text.replace("&nbsp;", " ")
+        .replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+    )
+    return re.sub(r"\s+", " ", text).strip().lower()
+
+
 @router.post("/", response_model=api_schemas.Message)
 def create_template(
     msg_in: api_schemas.MessageCreate,
     db: Session = Depends(get_db),
     current_branch: db_models.Branch = Depends(get_current_branch),
 ):
+    norm_type = _normalize_template_text(msg_in.template_type)
+    norm_content = _normalize_template_text(msg_in.content)
+
+    existing_templates = (
+        db.query(db_models.Message)
+        .filter(
+            (db_models.Message.branch_id == current_branch.id)
+            | (db_models.Message.branch_id == None)
+        )
+        .all()
+    )
+    for ex in existing_templates:
+        if _normalize_template_text(ex.content) == norm_content or (
+            _normalize_template_text(ex.template_type) == norm_type
+            and ex.branch_id == current_branch.id
+        ):
+            raise HTTPException(
+                status_code=400,
+                detail="Duplicate template: A template with the same name or content already exists.",
+            )
+
     try:
         new_msg = db_models.Message(
-            template_type=msg_in.template_type,
-            content=msg_in.content,
+            template_type=msg_in.template_type.strip(),
+            content=msg_in.content.strip(),
             branch_id=current_branch.id,
         )
         db.add(new_msg)

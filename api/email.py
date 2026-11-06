@@ -223,6 +223,23 @@ def read_email_logs(
     
     return {"items": items, "total": total}
 
+@router.delete("/clear-all")
+def clear_all_branch_email_logs(
+    db: Session = Depends(get_db),
+    current_branch: db_models.Branch = Depends(get_current_branch),
+):
+    try:
+        deleted = (
+            db.query(db_models.EmailLog)
+            .filter(db_models.EmailLog.branch_id == current_branch.id)
+            .delete(synchronize_session=False)
+        )
+        db.commit()
+        return {"message": f"Successfully deleted all {deleted} Email logs", "count": deleted}
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Failed to clear Email logs")
+
 @router.delete("/{log_id}")
 def delete_email_log(
     log_id: int,
@@ -246,3 +263,4 @@ def delete_email_log(
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail="Failed to delete Email log")
+

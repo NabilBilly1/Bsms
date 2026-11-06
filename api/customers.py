@@ -1,8 +1,8 @@
-import re
 from typing import List, Optional
 
 from core.database import get_db
 from core.logger import get_logger
+from core.sms_utils import normalize_phone, is_valid_phone
 from fastapi import APIRouter, Depends, HTTPException
 from models import models as db_models
 from schemas import schemas as api_schemas
@@ -15,28 +15,6 @@ logger = get_logger(__name__)
 
 router = APIRouter()
 
-
-def normalize_ghana_number(phone: str) -> str:
-    # Remove all non-numeric characters
-    clean = re.sub(r"\D", "", phone)
-
-    if clean.startswith("0") and len(clean) == 10:
-        return "+233" + clean[1:]
-    if clean.startswith("233") and len(clean) == 12:
-        return "+" + clean
-    if len(clean) == 9:
-        return "+233" + clean
-
-    # If it already looks correct, just add + if missing
-    if len(clean) == 12 and not phone.startswith("+"):
-        return "+" + clean
-
-    return phone
-
-
-def validate_ghana_number(phone: str) -> bool:
-    pattern = r"^\+233\d{9}$"
-    return bool(re.match(pattern, phone))
 
 
 @router.get("/stats")
@@ -98,11 +76,11 @@ def create_customer(
 ):
     try:
         # Standardize and Validate Phone Number
-        normalized_phone = normalize_ghana_number(customer_in.phone_number)
-        if not validate_ghana_number(normalized_phone):
+        normalized_phone = normalize_phone(customer_in.phone_number)
+        if not is_valid_phone(normalized_phone):
             raise HTTPException(
                 status_code=400,
-                detail=f"Invalid Ghana phone number format. Expected +233XXXXXXXXX, got {normalized_phone}",
+                detail=f"Invalid phone number format ({customer_in.phone_number}). Please provide a valid phone number (e.g. 024XXXXXXX or international +234..., +1..., +44...).",
             )
 
         # Check if customer already exists for this branch with normalized phone
@@ -201,10 +179,11 @@ def update_customer(
         update_data = customer_in.model_dump(exclude_unset=True)
 
         if "phone_number" in update_data:
-            normalized_phone = normalize_ghana_number(update_data["phone_number"])
-            if not validate_ghana_number(normalized_phone):
+            normalized_phone = normalize_phone(update_data["phone_number"])
+            if not is_valid_phone(normalized_phone):
                 raise HTTPException(
-                    status_code=400, detail=f"Invalid Ghana phone number format."
+                    status_code=400,
+                    detail=f"Invalid phone number format ({update_data['phone_number']}). Please provide a valid phone number.",
                 )
             update_data["phone_number"] = normalized_phone
 

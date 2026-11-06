@@ -79,12 +79,23 @@ class BranchCreate(BranchBase):
     pin: str
 
 
+class BranchUpdate(BaseModel):
+    name: Optional[str] = None
+    branch_code: Optional[str] = None
+    pin: Optional[str] = None
+
+
 class Branch(BranchBase):
     id: int
     created_at: datetime
 
     class Config:
         from_attributes = True
+
+
+class AdminBranch(Branch):
+    company_name: Optional[str] = None
+    company_slug: Optional[str] = None
 
 
 # Customer Schemas
@@ -127,6 +138,7 @@ class MessageCreate(MessageBase):
 class MessageUpdate(BaseModel):
     template_type: Optional[str] = None
     content: Optional[str] = None
+    branch_id: Optional[int] = None
 
 
 class Message(MessageBase):
@@ -135,6 +147,13 @@ class Message(MessageBase):
 
     class Config:
         from_attributes = True
+
+
+class AdminTemplate(Message):
+    branch_name: Optional[str] = None
+    company_id: Optional[int] = None
+    company_name: Optional[str] = None
+
 
 
 # SMS Log Schemas
@@ -292,6 +311,58 @@ class GlobalStats(BaseModel):
     total_sms: int
     total_emails: int
     total_customers: int
+
+class SendingStats(BaseModel):
+    total: int = 0
+    sent: int = 0
+    failed: int = 0
+    queued: int = 0
+    success_rate: float = 0.0
+
+class CompanySendingBreakdown(BaseModel):
+    id: int
+    name: str
+    slug: str
+    is_active: bool = True
+    created_at: Optional[datetime] = None
+    branches_count: int = 0
+    customers_count: int = 0
+    sms: SendingStats
+    email: SendingStats
+    last_activity: Optional[datetime] = None
+    gateways: dict = {"hubtel": False, "brevo": False, "paystack": False}
+
+class DashboardTotals(BaseModel):
+    total_companies: int = 0
+    total_branches: int = 0
+    total_customers: int = 0
+    total_sms: int = 0
+    sms_sent: int = 0
+    sms_failed: int = 0
+    sms_queued: int = 0
+    sms_success_rate: float = 0.0
+    total_email: int = 0
+    email_sent: int = 0
+    email_failed: int = 0
+    email_queued: int = 0
+    email_success_rate: float = 0.0
+    sms_today: int = 0
+    email_today: int = 0
+    total_messages: int = 0
+
+class DailyTrendPoint(BaseModel):
+    date: str
+    label: str
+    sms: int = 0
+    email: int = 0
+    total: int = 0
+
+class CompanyBreakdownResponse(BaseModel):
+    timeframe: str = "all"
+    totals: DashboardTotals
+    companies: List[CompanySendingBreakdown]
+    daily_trend: List[DailyTrendPoint] = []
+
 
 
 # Paystack & Payment Schemas
